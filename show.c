@@ -17,39 +17,13 @@
 #include "libs/parson.c"
 
 #include "extraterm_client.c"
+#include "tty_utils.c"
+#include "utils.c"
 
 /* This is kept a multiple of 3 to avoid padding in the base64 representation. */
 const size_t MAX_CHUNK_BYTES = 3 * 1024;
 
-struct termios old_tty_settings;
-
-void restore_tty() {
-    tcsetattr(STDIN_FILENO, TCSADRAIN, &old_tty_settings);
-    fflush(stderr);
-}
-
-void turn_off_echo() {
-    /* Turn off echo on the tty. */
-    if (!isatty(STDIN_FILENO)) {
-        return;
-    }
-
-    if (tcgetattr(STDIN_FILENO, &old_tty_settings) == -1) {
-        perror("tcgetattr");
-        return;
-    }
-
-    struct termios new_tty_settings;
-    tcgetattr(STDIN_FILENO, &new_tty_settings);
-    new_tty_settings.c_lflag = new_tty_settings.c_lflag & ~ECHO;
-
-    tcsetattr(STDIN_FILENO, TCSADRAIN, &new_tty_settings);
-
-    /* Set up a hook to restore the tty settings at exit. */
-    atexit(restore_tty);
-}
-
-void send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetype, const char* charset,
+int send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetype, const char* charset,
                         size_t filesize, bool download_flag) {
     turn_off_echo();
 
@@ -66,13 +40,11 @@ void send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetyp
     while (true) {
         read_count = fread(buffer, 1, MAX_CHUNK_BYTES, fhandle);
         if (read_count == 0) {
-
-
+            if (!feof(fhandle)) {
+                 return EXIT_FAILURE;
+            }
             break;
         }
-        // if (feof(fhandle)) {
-        //     break;
-        // }
 
         sha256_init(&hash);
         if (is_previous_hash) {
@@ -104,6 +76,7 @@ void send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetyp
     fflush(stdout);
 
     extraterm_end_file_transfer();
+    return EXIT_SUCCESS;
 }
 
 int show_file(const char* filename, const char* mimetype, const char* charset, const char* filepath, bool download_flag) {
@@ -119,15 +92,14 @@ int show_file(const char* filename, const char* mimetype, const char* charset, c
         return EXIT_FAILURE;
     }
 
-    send_mimetype_data(fhandle, filename ? filename : filepath, mimetype, charset, st.st_size, download_flag);
+    int result = send_mimetype_data(fhandle, filename ? filename : filepath, mimetype, charset, st.st_size, download_flag);
 
     fclose(fhandle);
-    return EXIT_SUCCESS;
+    return result;
 }
 
 int show_stdin(const char* mimetype, const char* charset, const char* filename, bool download_flag) {
-    send_mimetype_data(stdin, filename, mimetype, charset, -1, download_flag);
-    return EXIT_SUCCESS;
+    return send_mimetype_data(stdin, filename, mimetype, charset, -1, download_flag);
 }
 
 void show_help() {
@@ -162,6 +134,8 @@ static const struct parg_option longopts[] = {
     { "filename", PARG_REQARG, NULL, 0 },
 #define TEXT_INDEX 4
     { "text", PARG_NOARG, NULL, 't' },
+#define HELP_INDEX 5
+    { "help", PARG_NOARG, NULL, 'h' },
     { 0, 0, 0, 0 }
 };
 
@@ -173,19 +147,19 @@ int main(int argc, char *argv[]) {
     for (int i=0; i<argc; i++) {
         file_options[i] = NULL;
     }
+    int file_count = 0;
 
     int c;
     const char *optstring = "dthv";
     int longindex = -1;
 
-    bool textFlag = false;
+    bool text_flag = false;
     bool download_flag = false;
     const char *filename = NULL;
     const char *charset = NULL;
     const char *mimetype = NULL;
 
     int optend = parg_reorder(argc, argv, optstring, NULL);
-    int file_count = 0;
 
     while ((c = parg_getopt_long(&ps, argc, argv, optstring, longopts, &longindex)) != -1) {
         switch (c) {
@@ -195,7 +169,7 @@ int main(int argc, char *argv[]) {
             break;
 
         case 't':
-            textFlag = true;
+            text_flag = true;
             break;
 
         case 'h':
@@ -269,7 +243,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    if (textFlag) {
+    if (text_flag) {
         mimetype = "text/plain";
     }
 

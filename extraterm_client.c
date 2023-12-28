@@ -51,13 +51,11 @@ void extraterm_end_file_transfer() {
     fputc(0, stdout);
 }
 
-void print_hex(unsigned char *buffer, size_t count) {
-    for (size_t i=0; i<count; i++) {
-        unsigned char byte = buffer[i];
-        unsigned char nibble = byte & 0xf;
-        unsigned char top_nibble = (byte >> 4) & 0xf;
-        char c1 = top_nibble < 10 ? '0' + top_nibble : 'a' + (top_nibble - 10);
-        char c2 = nibble < 10 ? '0' + nibble : 'a' + (nibble - 10);
-        printf("%c%c", c1, c2);
-    }
+void extraterm_client_request_frame(const char *frame_name) {
+    fputs(EXTRATERM_INTRO, stderr);
+    fputs(get_extratern_cookie(), stderr);
+    fputs(";4\x07", stderr);
+    fputs(frame_name, stderr);
+    fputc(0, stderr);
+    fflush(stderr);
 }

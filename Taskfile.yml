@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+
+  build:
+    vars:
+      EXE_NAMES: show from
+    cmds:
+      - for: { var: EXE_NAMES }
+        cmd: gcc -O2 {{.ITEM}}.c -o {{ base .ITEM}}
+
+  build_test:
+    cmds:
+      - gcc -O2 utils_test.c -o utils_test
+
+  test:
+    deps: [build_test]
+    cmds:
+      - ./utils_test
