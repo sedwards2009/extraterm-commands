@@ -31,7 +31,7 @@ int send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetype
     unsigned char buffer[MAX_CHUNK_BYTES];
 
     size_t read_count;
-    unsigned char b64buffer[b64d_size(SHA256_SIZE_BYTES)];
+    unsigned char b64buffer[b64d_size(MAX_CHUNK_BYTES)];
 
     sha256_context hash;
 

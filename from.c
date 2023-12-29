@@ -45,7 +45,6 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
     const int COMMAND_PREFIX_LENGTH = 3;
 
     char line[LINE_LENGTH];
-    char b64data[LINE_LENGTH];
     char contents[LINE_LENGTH];
 
     read_stdin_line(line, LINE_LENGTH);
@@ -67,12 +66,7 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
     strncpy(line_hash, line + (strlen(line) - HASH_LENGTH), HASH_LENGTH);
 
     size_t b64data_length = strlen(line) - COMMAND_PREFIX_LENGTH - HASH_LENGTH -1;
-    strncpy(b64data, line + COMMAND_PREFIX_LENGTH, b64data_length);
-
-    // printf("b64data => '%s'\n", b64data);
-    // fflush(stdout);
-
-    size_t contents_length = b64_decode(b64data, b64data_length, contents);
+    size_t contents_length = b64_decode(line + COMMAND_PREFIX_LENGTH, b64data_length, contents);
 
     sha256_context hash;
     sha256_init(&hash);
@@ -110,8 +104,7 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
 
         if (string_starts_with(line, "#D:") || string_starts_with(line, "#E:") || string_starts_with(line, "#A:")) {
             size_t b64data_length = strlen(line) - COMMAND_PREFIX_LENGTH - HASH_LENGTH -1;
-            strncpy(b64data, line + COMMAND_PREFIX_LENGTH, b64data_length);
-            size_t contents_length = b64_decode(b64data, b64data_length, contents);
+            size_t contents_length = b64_decode(line + COMMAND_PREFIX_LENGTH, b64data_length, contents);
 
             strncpy(line_hash, line + (strlen(line) - HASH_LENGTH), HASH_LENGTH);
             convert_to_lowercase(line_hash);
@@ -163,9 +156,10 @@ char *write_frame_to_disk(Arena *arena, const char *frame_name) {
     char *final_filename = NULL;
     FILE *tmp_fhandle = NULL;
     char *filename = NULL;
+    int tmp_fd = -1;
 
     tmp_filename = arena_strdup(arena, "extraterm_from_XXXXXX");
-    int tmp_fd = mkstemp(tmp_filename);
+    tmp_fd = mkstemp(tmp_filename);
     if (tmp_fd == -1) {
         fputs("[Error] Unable to open temp file.\n", stderr);
         goto clean_up;
@@ -174,7 +168,6 @@ char *write_frame_to_disk(Arena *arena, const char *frame_name) {
     tmp_fhandle = fdopen(tmp_fd, "wb");
     if (!tmp_fhandle) {
         perror("[Error] Unable to open temp file.");
-        close(tmp_fd);
         goto clean_up;
     }
 
@@ -214,6 +207,9 @@ char *write_frame_to_disk(Arena *arena, const char *frame_name) {
 clean_up:
     if (tmp_fhandle) {
         fclose(tmp_fhandle);
+    }
+    if (tmp_fd != -1) {
+        close(tmp_fd);
     }
     unlink(tmp_filename);
     return filename;
