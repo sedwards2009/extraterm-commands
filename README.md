@@ -5,8 +5,6 @@ C based implementations of the utility commands for use with [Extraterm](https:/
 
 ## Libraries Used
 
-https://github.com/jibsen/parg
-
 https://github.com/ilvn/SHA256
 
 https://github.com/joedf/base64.c
@@ -14,6 +12,8 @@ https://github.com/joedf/base64.c
 https://github.com/kgabis/parson
 
 https://github.com/tsoding/arena
+
+https://github.com/ethomson/adopt
 
 
 ## License

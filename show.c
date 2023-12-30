@@ -11,7 +11,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "libs/parg.c"
+#include "libs/adopt.h"
+#include "libs/adopt.c"
 #include "libs/sha256.c"
 #include "libs/base64.c"
 #include "libs/parson.c"
@@ -102,144 +103,51 @@ int show_stdin(const char* mimetype, const char* charset, const char* filename, 
     return send_mimetype_data(stdin, filename, mimetype, charset, -1, download_flag);
 }
 
-void show_help() {
-    printf("usage: show [-h] [--charset CHARSET] [-d] [--mimetype MIMETYPE] [--filename FILENAME] [-t] [file ...]\n"
-        "\n"
-        "Show a file inside Extraterm.\n"
-        "\n"
-        "positional arguments:\n"
-        "file                 file name. The file data is read from stdin if no files are specified.\n"
-        "\n"
-        "options:\n"
-        "-h, --help           show this help message and exit\n"
-        "--charset CHARSET    the character set of the input file (default: UTF8)\n"
-        "-d, --download       download the file and don't show it\n"
-        "--mimetype MIMETYPE  the mime-type of the input file (default: auto-detect)\n"
-        "--filename FILENAME  sets the file name in the metadata sent to the terminal (useful when reading from stdin).\n"
-        "  -t, --text         Treat the file as plain text. \n");
-}
-
 void show_version() {
 
 }
 
-static const struct parg_option longopts[] = {
-#define CHARSET_INDEX 0
-    { "charset", PARG_REQARG, NULL, 0 },
-#define DOWNLOAD_INDEX 1
-    { "download", PARG_NOARG, NULL, 'd' },
-#define MIMETYPE_INDEX 2
-    { "mimetype", PARG_REQARG, NULL, 0 },
-#define FILENAME_INDEX 3
-    { "filename", PARG_REQARG, NULL, 0 },
-#define TEXT_INDEX 4
-    { "text", PARG_NOARG, NULL, 't' },
-#define HELP_INDEX 5
-    { "help", PARG_NOARG, NULL, 'h' },
-    { 0, 0, 0, 0 }
-};
-
 int main(int argc, char *argv[]) {
-    struct parg_state ps;
-    parg_init(&ps);
+    char **filename_array = NULL;
+    char *charset = NULL;
+    char *mimetype = NULL;
+    char *filename = NULL;
+    int download_flag = 0;
+    int help_flag = 0;
+    int text_flag = 0;
+    int version_flag = 0;
 
-    const char *file_options[argc];
-    for (int i=0; i<argc; i++) {
-        file_options[i] = NULL;
+    adopt_spec opt_specs[] = {
+        { .type=ADOPT_TYPE_SWITCH, .name="help", .alias='h', .value=&help_flag, .switch_value=1, .help="show this help message and exit" },
+        { .type=ADOPT_TYPE_SWITCH, .name="version", .alias='v', .value=&version_flag, .switch_value=1 },
+        { .type=ADOPT_TYPE_SWITCH, .name="download", .alias='d', .value=&download_flag, .switch_value=1 },
+        { .type=ADOPT_TYPE_SWITCH, .name="text", .alias='t', .value=&text_flag, .switch_value=1, .help="treat the file as plain text" },
+        { .type=ADOPT_TYPE_VALUE, .name="charset", .value=&charset, .help="the character set of the input file (default: UTF8)" },
+        { .type=ADOPT_TYPE_VALUE, .name="mimetype", .value=&mimetype, .help="the mime-type of the input file (default: auto-detect)" },
+        { .type=ADOPT_TYPE_VALUE, .name="filename", .value=&filename, .help="sets the file name in the metadata sent to the terminal (useful when reading from stdin)" },
+        { .type=ADOPT_TYPE_LITERAL },
+        { .type=ADOPT_TYPE_ARGS, .value=&filename_array, .value_name="filename", .help="Filenames to read from" },
+        { 0 },
+    };
+
+    adopt_opt result;
+    if (adopt_parse(&result, opt_specs, argv + 1, argc - 1, ADOPT_PARSE_DEFAULT) != 0) {
+        adopt_status_fprint(stderr, argv[0], &result);
+        adopt_usage_fprint(stderr, argv[0], opt_specs);
+        return EXIT_FAILURE;
     }
-    int file_count = 0;
 
-    int c;
-    const char *optstring = "dthv";
-    int longindex = -1;
-
-    bool text_flag = false;
-    bool download_flag = false;
-    const char *filename = NULL;
-    const char *charset = NULL;
-    const char *mimetype = NULL;
-
-    int optend = parg_reorder(argc, argv, optstring, NULL);
-
-    while ((c = parg_getopt_long(&ps, argc, argv, optstring, longopts, &longindex)) != -1) {
-        switch (c) {
-
-        case 'd':
-            download_flag = true;
-            break;
-
-        case 't':
-            text_flag = true;
-            break;
-
-        case 'h':
-            show_help();
-            return EXIT_SUCCESS;
-            break;
-
-        case 'v':
-            show_version();
-            return EXIT_SUCCESS;
-            break;
-
-        case 1:
-            file_options[file_count] = ps.optarg;
-            file_count++;
-            break;
-
-        case 0:
-            // printf("flag option index %i, '%s'\n", longindex, ps.optarg);
-            switch (longindex) {
-            case CHARSET_INDEX:
-                charset = ps.optarg;
-                break;
-
-            case MIMETYPE_INDEX:
-                mimetype = ps.optarg;
-                break;
-
-            case FILENAME_INDEX:
-                filename = ps.optarg;
-                break;
-            }
-            longindex = -1;
-            break;
-
-        case '?':
-            // printf("unknown option -%i\n", (int) ps.optopt);
-            // printf("ps.optind %i\n", ps.optind);
-            // printf("-> %s\n", argv[ps.optind-1]);
-            // printf("longindex: %d\n", longindex);
-            switch (longindex) {
-                case MIMETYPE_INDEX:
-                    fprintf(stderr, "option --mimetype requires a value\n");
-                    break;
-
-                case FILENAME_INDEX:
-                    fprintf(stderr, "option --filename requires a value\n");
-                    break;
-
-                case CHARSET_INDEX:
-                    fprintf(stderr, "option --charset requires a value\n");
-                    break;
-
-                default:
-                    fprintf(stderr, "unknown option %s\n", argv[ps.optind-1]);
-                    break;
-
-            }
-            return EXIT_FAILURE;
-            break;
-
-        default:
-            fprintf(stderr, "error: unhandled option -%c'\n", c);
-            return EXIT_FAILURE;
-            break;
-        }
+    if (help_flag) {
+        adopt_usage_fprint(stderr, argv[0], opt_specs);
+        return EXIT_SUCCESS;
+    }
+    if (version_flag) {
+        show_version();
+        return EXIT_SUCCESS;
     }
 
     if (!is_extraterm()) {
-        fprintf(stderr, "Sorry, you're not using Extraterm as your terminal.\n");
+        fprintf(stderr, "[Error] Sorry, you're not using Extraterm as your terminal.\n");
         return EXIT_FAILURE;
     }
 
@@ -247,15 +155,13 @@ int main(int argc, char *argv[]) {
         mimetype = "text/plain";
     }
 
-    if (file_count != 0) {
-        for (int i=0; i<file_count; i++) {
-            int result = show_file(filename, mimetype, charset, file_options[i], download_flag);
+    if (filename_array) {
+        for (int i = 0; i < result.args_len; i++) {
+            int result = show_file(filename, mimetype, charset, filename_array[i], download_flag);
             if (result != EXIT_SUCCESS) {
                 return result;
             }
         }
-        return EXIT_SUCCESS;
-
     } else {
         return show_stdin(mimetype, charset, filename, download_flag);
     }

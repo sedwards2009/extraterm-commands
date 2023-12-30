@@ -8,7 +8,8 @@
 
 #include "arena.h"
 
-#include "libs/parg.c"
+#include "libs/adopt.h"
+#include "libs/adopt.c"
 #include "libs/parson.c"
 #include "libs/base64.c"
 #include "libs/sha256.c"
@@ -79,7 +80,7 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
     sha256_hash_to_hex(previous_hash, hash_hex);
     hash_hex[HASH_LENGTH] = '\0';
 
-    /* Check the hash */
+    // Check the hash
     convert_to_lowercase(line_hash);
     if (strcmp(line_hash, hash_hex) != 0) {
         fputs("[Error] Hash didn't match for metadata line. Expected '", stderr);
@@ -114,7 +115,7 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
             sha256_hash(&hash, contents, contents_length);
             sha256_done(&hash, previous_hash);
 
-            /* Check the hash */
+            // Check the hash
             sha256_hash_to_hex(previous_hash, hash_hex);
             hash_hex[HASH_LENGTH] = '\0';
             if (strcmp(line_hash, hash_hex) != 0) {
@@ -128,7 +129,7 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
             }
 
             if (string_starts_with(line, "#E:")) {
-                /* EOF */
+                // EOF
                 break;
             }
 
@@ -138,7 +139,7 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
                 return false;
             }
 
-            /* Send the input to stdout. */
+            // Send the input to stdout.
             fwrite(contents, sizeof(char), contents_length, fhandle);
 
         } else {
@@ -237,73 +238,36 @@ void show_help() {
         "  --xargs ...  execute a command with frame contents as temp file names\n");
 }
 
-static const struct parg_option longopts[] = {
-#define SAVE_INDEX 0
-    { "save", PARG_REQARG, NULL, 's' },
-#define XARGS_INDEX 1
-    { "xargs", PARG_NOARG, NULL, 0 },
-    { 0, 0, 0, 0 }
-};
-
 int main(int argc, char *argv[]) {
-    struct parg_state ps;
-    parg_init(&ps);
+    char **frames_array = NULL;
+    char *xargs = NULL;
+    int help_flag = 0;
+    int save_flag = 0;
+    int version_flag = 0;
 
-    const char *frame_names[argc];
-    for (int i=0; i<argc; i++) {
-        frame_names[i] = NULL;
+    adopt_spec opt_specs[] = {
+        { .type=ADOPT_TYPE_SWITCH, .name="help", .alias='h', .value=&help_flag, .switch_value=1, .help="show this help message and exit" },
+        { .type=ADOPT_TYPE_SWITCH, .name="version", .alias='v', .value=&version_flag, .switch_value=1 },
+        { .type=ADOPT_TYPE_SWITCH, .name="save", .alias='s', .value=&save_flag, .switch_value=1 },
+        { .type=ADOPT_TYPE_VALUE, .name="xargs", .value=&xargs, .help="" },
+        { .type=ADOPT_TYPE_LITERAL },
+        { .type=ADOPT_TYPE_ARGS, .value=&frames_array, .value_name="frames", .help="Frame IDs" },
+    };
+
+    adopt_opt result;
+    if (adopt_parse(&result, opt_specs, argv + 1, argc - 1, ADOPT_PARSE_DEFAULT) != 0) {
+        adopt_status_fprint(stderr, argv[0], &result);
+        adopt_usage_fprint(stderr, argv[0], opt_specs);
+        return EXIT_FAILURE;
     }
-    int frame_name_count = 0;
 
-    int c;
-    const char *optstring = "sv";
-    int longindex = -1;
-    bool save_flag = false;
-    bool xargs_flag = false;
-    const char *save_filename = NULL;
-
-    int optend = parg_reorder(argc, argv, optstring, NULL);
-
-    while ((c = parg_getopt_long(&ps, argc, argv, optstring, longopts, &longindex)) != -1) {
-        switch (c) {
-
-        case 's':
-            save_flag = true;
-            break;
-
-        case 'v':
-            show_version();
-            return EXIT_SUCCESS;
-            break;
-
-        case 'h':
-            show_help();
-            return EXIT_SUCCESS;
-            break;
-
-        case 1:
-            frame_names[frame_name_count] = ps.optarg;
-            frame_name_count++;
-            break;
-
-        case 0:
-            switch (longindex) {
-            case SAVE_INDEX:
-                save_flag = true;
-                break;
-
-            case XARGS_INDEX:
-                xargs_flag = true;
-                break;
-            }
-            longindex = -1;
-            break;
-
-        default:
-            fprintf(stderr, "[Error] unhandled option -%c'\n", c);
-            return EXIT_FAILURE;
-            break;
-        }
+    if (help_flag) {
+        adopt_usage_fprint(stderr, argv[0], opt_specs);
+        return EXIT_SUCCESS;
+    }
+    if (version_flag) {
+        show_version();
+        return EXIT_SUCCESS;
     }
 
     if (!is_extraterm()) {
@@ -311,39 +275,42 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    /* make sure that stdin is a tty */
+    // make sure that stdin is a tty
     if (!isatty(fileno(stdin))) {
         fprintf(stderr, "[Error] 'from' command must be connected to tty on stdin.\n");
         return EXIT_FAILURE;
     }
 
-/*    if args.xargs is None:*/
-        /* Normal execution. Output the frames */
-        for (int i=0; i<frame_name_count; i++) {
-            int rc;
-            const char *frame_name = frame_names[i];
-            if (save_flag) {
-                Arena arena = {0};
-                char *filename = write_frame_to_disk(&arena, frame_name);
-                if (filename != NULL) {
-                    printf("Wrote %s\n", filename);
+    if (xargs == NULL) {
+        if (frames_array != NULL) {
+            // Normal execution. Output the frames
+            for (int i=0; i<result.args_len; i++) {
+                int rc;
+                const char *frame_name = frames_array[i];
+                if (save_flag) {
+                    Arena arena = {0};
+                    char *filename = write_frame_to_disk(&arena, frame_name);
+                    if (filename != NULL) {
+                        printf("Wrote %s\n", filename);
+                    } else {
+                        rc = EXIT_FAILURE;
+                    }
+                    arena_free(&arena);
+
                 } else {
-                    rc = EXIT_FAILURE;
+                    Arena arena = {0};
+                    rc = output_frame(&arena, frame_name) ? EXIT_SUCCESS : EXIT_FAILURE;
+                    arena_free(&arena);
                 }
-                arena_free(&arena);
 
-            } else {
-                Arena arena = {0};
-                rc = output_frame(&arena, frame_name) ? EXIT_SUCCESS : EXIT_FAILURE;
-                arena_free(&arena);
+                if (rc != 0) {
+                    return rc;
+                }
             }
-
-            if (rc != 0) {
-                return rc;
-            }
-        return EXIT_SUCCESS;
-/*    else:
-        sys.exit(xargs(args.frames, args.xargs))*/
         }
-
+        return EXIT_SUCCESS;
+    } else {
+        // sys.exit(xargs(args.frames, args.xargs))
+        return EXIT_SUCCESS;
+    }
 }
