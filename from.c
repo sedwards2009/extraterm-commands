@@ -1,4 +1,5 @@
 /**
+ * Copyright 2023 Simon Edwards <simon@simonzone.com>
  *
  * This source code is licensed under the MIT license which is detailed in the LICENSE.txt file.
  */
@@ -150,7 +151,6 @@ bool request_frame(Arena *arena, const char *frame_name, FILE *fhandle, JSON_Val
     return true;
 }
 
-
 char *write_frame_to_disk(Arena *arena, const char *frame_name) {
     JSON_Value *metadata = NULL;
     char *tmp_filename = NULL;
@@ -224,20 +224,6 @@ bool output_frame(Arena *arena, const char *frame_name) {
 void show_version() {
 }
 
-void show_help() {
-    printf("usage: from [-h] [-s] [--xargs ...] frame_ID [frame_ID ...]\n"
-        "\n"
-        "Fetch data from an Extraterm frame.\n"
-        "\n"
-        "positional arguments:\n"
-        "frame_ID     a frame ID\n"
-        "\n"
-        "options:\n"
-        "-h, --help   show this help message and exit\n"
-        "-s, --save   write frames to disk\n"
-        "  --xargs ...  execute a command with frame contents as temp file names\n");
-}
-
 int main(int argc, char *argv[]) {
     char **frames_array = NULL;
     char *xargs = NULL;
@@ -249,7 +235,6 @@ int main(int argc, char *argv[]) {
         { .type=ADOPT_TYPE_SWITCH, .name="help", .alias='h', .value=&help_flag, .switch_value=1, .help="show this help message and exit" },
         { .type=ADOPT_TYPE_SWITCH, .name="version", .alias='v', .value=&version_flag, .switch_value=1 },
         { .type=ADOPT_TYPE_SWITCH, .name="save", .alias='s', .value=&save_flag, .switch_value=1 },
-        { .type=ADOPT_TYPE_VALUE, .name="xargs", .value=&xargs, .help="" },
         { .type=ADOPT_TYPE_LITERAL },
         { .type=ADOPT_TYPE_ARGS, .value=&frames_array, .value_name="frames", .help="Frame IDs" },
     };
@@ -281,36 +266,31 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    if (xargs == NULL) {
-        if (frames_array != NULL) {
-            // Normal execution. Output the frames
-            for (int i=0; i<result.args_len; i++) {
-                int rc;
-                const char *frame_name = frames_array[i];
-                if (save_flag) {
-                    Arena arena = {0};
-                    char *filename = write_frame_to_disk(&arena, frame_name);
-                    if (filename != NULL) {
-                        printf("Wrote %s\n", filename);
-                    } else {
-                        rc = EXIT_FAILURE;
-                    }
-                    arena_free(&arena);
-
+    if (frames_array != NULL) {
+        // Normal execution. Output the frames
+        for (int i=0; i<result.args_len; i++) {
+            int rc;
+            const char *frame_name = frames_array[i];
+            if (save_flag) {
+                Arena arena = {0};
+                char *filename = write_frame_to_disk(&arena, frame_name);
+                if (filename != NULL) {
+                    printf("Wrote %s\n", filename);
                 } else {
-                    Arena arena = {0};
-                    rc = output_frame(&arena, frame_name) ? EXIT_SUCCESS : EXIT_FAILURE;
-                    arena_free(&arena);
+                    rc = EXIT_FAILURE;
                 }
+                arena_free(&arena);
 
-                if (rc != 0) {
-                    return rc;
-                }
+            } else {
+                Arena arena = {0};
+                rc = output_frame(&arena, frame_name) ? EXIT_SUCCESS : EXIT_FAILURE;
+                arena_free(&arena);
+            }
+
+            if (rc != 0) {
+                return rc;
             }
         }
-        return EXIT_SUCCESS;
-    } else {
-        // sys.exit(xargs(args.frames, args.xargs))
-        return EXIT_SUCCESS;
     }
+    return EXIT_SUCCESS;
 }

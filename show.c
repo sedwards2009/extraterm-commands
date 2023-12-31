@@ -83,13 +83,13 @@ int send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetype
 int show_file(const char* filename, const char* mimetype, const char* charset, const char* filepath, bool download_flag) {
     FILE* fhandle = fopen(filepath, "rb");
     if (fhandle == NULL) {
-        fprintf(stderr, "Unable to open file '%s'. %s\n", filepath, strerror(errno));
+        fprintf(stderr, "[Error] Unable to open file '%s'. %s\n", filepath, strerror(errno));
         return EXIT_FAILURE;
     }
 
     struct stat st;
     if (fstat(fileno(fhandle), &st) != 0) {
-        perror("Error getting file size");
+        perror("[Error] Error occured while getting the file size.");
         return EXIT_FAILURE;
     }
 
