@@ -237,6 +237,7 @@ int main(int argc, char *argv[]) {
         { .type=ADOPT_TYPE_SWITCH, .name="save", .alias='s', .value=&save_flag, .switch_value=1 },
         { .type=ADOPT_TYPE_LITERAL },
         { .type=ADOPT_TYPE_ARGS, .value=&frames_array, .value_name="frames", .help="Frame IDs" },
+        { 0 },
     };
 
     adopt_opt result;

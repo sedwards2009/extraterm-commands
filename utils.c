@@ -107,7 +107,6 @@ void string_strip(char *buffer) {
         return;
     }
 
-    int i = 0;
     for (int i=0; (start_index+i)<=len; i++) {
         buffer[i] = buffer[start_index+i];
     }

@@ -33,7 +33,7 @@ int send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetype
     unsigned char buffer[MAX_CHUNK_BYTES];
 
     size_t read_count;
-    unsigned char b64buffer[b64d_size(MAX_CHUNK_BYTES)];
+    char b64buffer[b64d_size(MAX_CHUNK_BYTES)];
 
     sha256_context hash;
 
@@ -55,7 +55,7 @@ int send_mimetype_data(FILE* fhandle, const char* filename, const char* mimetype
         sha256_hash(&hash, buffer, read_count);
 
         fputs("D:", stdout);
-        b64_encode(buffer, read_count, b64buffer);
+        b64_encode(buffer, read_count, (unsigned char *) b64buffer);
         fputs(b64buffer, stdout);
 
         fputs(":", stdout);
