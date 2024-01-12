@@ -17,3 +17,33 @@ tasks:
     deps: [build_test]
     cmds:
       - ./utils_test
+
+  build_zig_docker:
+    cmds:
+      - docker build -t extraterm_commands_zig .
+
+  zig_shell:
+    deps: [build_zig_docker]
+    cmds:
+      - docker run -it --rm  --volume .:/extraterm-commands extraterm_commands_zig /bin/bash
+
+  build_exe_zig:
+    deps: [build_zig_docker]
+    cmds:
+      - docker run -it --rm  --volume .:/extraterm-commands extraterm_commands_zig /bin/bash -c 'cd /extraterm-commands && task _build_all_exe_zig'
+
+  _build_exe_zig:
+    vars:
+      ITEM: '{{.NAME}}'
+    cmds:
+      - zig build-exe {{.ITEM}}.c --library c -target x86_64-macos -O ReleaseSmall -femit-bin={{.ITEM}}.x86_64-macos
+      - zig build-exe {{.ITEM}}.c --library c -target aarch64-linux-musl -O ReleaseSmall -femit-bin={{.ITEM}}.aarch64-linux-musl
+      - zig build-exe {{.ITEM}}.c --library c -target x86_64-linux-musl -O ReleaseSmall -femit-bin={{.ITEM}}.x86_64-linux-musl
+
+  _build_all_exe_zig:
+    vars:
+      EXE_NAMES: show from
+    cmds:
+      - for: { var: EXE_NAMES, as: NAME }
+        task: _build_exe_zig
+        vars: { NAME: '{{.NAME}}' }
