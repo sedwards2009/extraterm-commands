@@ -5,9 +5,11 @@ tasks:
   build:
     vars:
       EXE_NAMES: show from
+      APP_VERSION:
+        sh: git describe --tags | sed 's/v//'
     cmds:
       - for: { var: EXE_NAMES }
-        cmd: gcc -O2 {{.ITEM}}.c -o {{ base .ITEM}}
+        cmd: gcc -O2 -DAPP_VERSION={{.APP_VERSION}} {{.ITEM}}.c -o {{ base .ITEM}}
 
   build_test:
     cmds:
@@ -22,28 +24,64 @@ tasks:
     cmds:
       - docker build -t extraterm_commands_zig .
 
-  zig_shell:
+  docker_shell:
     deps: [build_zig_docker]
+    vars:
+      USER_ID:
+        sh: id -u
+      GROUP_ID:
+        sh: id -g
     cmds:
-      - docker run -it --rm  --volume .:/extraterm-commands extraterm_commands_zig /bin/bash
+      - docker run -it --rm  --user {{.USER_ID}}:{{.GROUP_ID}} --volume .:/extraterm-commands extraterm_commands_zig /bin/bash
 
-  build_exe_zig:
+  package:
     deps: [build_zig_docker]
+    vars:
+      USER_ID:
+        sh: id -u
+      GROUP_ID:
+        sh: id -g
     cmds:
-      - docker run -it --rm  --volume .:/extraterm-commands extraterm_commands_zig /bin/bash -c 'cd /extraterm-commands && task _build_all_exe_zig'
+      - docker run -it --rm --user {{.USER_ID}}:{{.GROUP_ID}} --volume .:/extraterm-commands extraterm_commands_zig /bin/bash -c 'cd /extraterm-commands && task -v _package_inside_docker'
+
+  clean:
+    cmds:
+      - cmd: rm -rf build
+        ignore_error: true
+
+  _package_inside_docker:
+    vars:
+      EXE_NAMES: show from
+      APP_VERSION:
+        sh: git describe --tags | sed 's/v//'
+    cmds:
+      - cmd: rm -rf 'build/extraterm-commands-{{.APP_VERSION}}'
+        ignore_error: true
+      - mkdir -p 'build/extraterm-commands-{{.APP_VERSION}}'
+      - for: { var: EXE_NAMES, as: NAME }
+        task: _build_exe_zig
+        vars: { NAME: '{{.NAME}}', APP_VERSION: '{{.APP_VERSION}}' }
+      - task: _zip_package
+        vars: { APP_VERSION: '{{.APP_VERSION}}' }
+
+  _zip_package:
+    vars:
+      APP_VERSION: '{{.APP_VERSION}}'
+    dir: /extraterm-commands/build
+    cmds:
+      - zip -r 'extraterm-commands-{{.APP_VERSION}}.zip' 'extraterm-commands-{{.APP_VERSION}}'
+  # ^ _zip_package is a seperate task because the `cd` command in mvdan/sh was broken,
+  # is fixed, but they haven't released a new version and Taskfile doesn't have the fix yet.
+  # The mvdan/sh fix is https://github.com/mvdan/sh/pull/1034
+  # -- Simon 2024-01-21
 
   _build_exe_zig:
     vars:
       ITEM: '{{.NAME}}'
+      APP_VERSION: '{{.APP_VERSION}}'
+      BUILD_DIR: 'build/extraterm-commands-{{.APP_VERSION}}'
+      ZIG_CACHE_DIR: 'build/zig-cache'
     cmds:
-      - zig build-exe {{.ITEM}}.c --library c -target x86_64-macos -O ReleaseSmall -femit-bin={{.ITEM}}.x86_64-macos
-      - zig build-exe {{.ITEM}}.c --library c -target aarch64-linux-musl -O ReleaseSmall -femit-bin={{.ITEM}}.aarch64-linux-musl
-      - zig build-exe {{.ITEM}}.c --library c -target x86_64-linux-musl -O ReleaseSmall -femit-bin={{.ITEM}}.x86_64-linux-musl
-
-  _build_all_exe_zig:
-    vars:
-      EXE_NAMES: show from
-    cmds:
-      - for: { var: EXE_NAMES, as: NAME }
-        task: _build_exe_zig
-        vars: { NAME: '{{.NAME}}' }
+      - zig build-exe {{.ITEM}}.c --library c --global-cache-dir {{.ZIG_CACHE_DIR}} -target x86_64-macos -O ReleaseSmall -femit-bin={{.BUILD_DIR}}/{{.ITEM}}.x86_64-macos -DAPP_VERSION={{.APP_VERSION}}
+      - zig build-exe {{.ITEM}}.c --library c --global-cache-dir {{.ZIG_CACHE_DIR}} -target aarch64-linux-musl -O ReleaseSmall -femit-bin={{.BUILD_DIR}}/{{.ITEM}}.aarch64-linux-musl -DAPP_VERSION={{.APP_VERSION}}
+      - zig build-exe {{.ITEM}}.c --library c --global-cache-dir {{.ZIG_CACHE_DIR}} -target x86_64-linux-musl -O ReleaseSmall -femit-bin={{.BUILD_DIR}}/{{.ITEM}}.x86_64-linux-musl -DAPP_VERSION={{.APP_VERSION}}
