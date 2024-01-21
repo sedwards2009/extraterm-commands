@@ -19,6 +19,12 @@
 #include "utils.c"
 #include "extraterm_client.c"
 
+#ifndef APP_VERSION
+#define APP_VERSION git
+#endif
+#define QUOTE(str) #str
+#define EXPAND_AND_QUOTE(str) QUOTE(str)
+#define QUOTED_APP_VERSION EXPAND_AND_QUOTE(APP_VERSION)
 
 bool read_stdin_line(char *buffer, size_t buffer_size) {
     bool ok = fgets(buffer, buffer_size, stdin) != NULL;
@@ -222,6 +228,7 @@ bool output_frame(Arena *arena, const char *frame_name) {
 }
 
 void show_version() {
+    printf("%s\n", QUOTED_APP_VERSION);
 }
 
 int main(int argc, char *argv[]) {

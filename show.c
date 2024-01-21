@@ -22,6 +22,13 @@
 #include "tty_utils.c"
 #include "utils.c"
 
+#ifndef APP_VERSION
+#define APP_VERSION git
+#endif
+#define QUOTE(str) #str
+#define EXPAND_AND_QUOTE(str) QUOTE(str)
+#define QUOTED_APP_VERSION EXPAND_AND_QUOTE(APP_VERSION)
+
 /* This is kept a multiple of 3 to avoid padding in the base64 representation. */
 const size_t MAX_CHUNK_BYTES = 3 * 1024;
 
@@ -105,7 +112,7 @@ int show_stdin(const char* mimetype, const char* charset, const char* filename, 
 }
 
 void show_version() {
-
+    printf("%s\n", QUOTED_APP_VERSION);
 }
 
 int main(int argc, char *argv[]) {
