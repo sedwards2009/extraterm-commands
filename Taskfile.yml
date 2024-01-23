@@ -61,6 +61,9 @@ tasks:
       - for: { var: EXE_NAMES, as: NAME }
         task: _build_exe_zig
         vars: { NAME: '{{.NAME}}', APP_VERSION: '{{.APP_VERSION}}' }
+      - cp setup_extraterm_bash.sh 'build/extraterm-commands-{{.APP_VERSION}}'
+      - cp setup_extraterm_fish.fish 'build/extraterm-commands-{{.APP_VERSION}}'
+      - cp setup_extraterm_zsh.zsh 'build/extraterm-commands-{{.APP_VERSION}}'
       - task: _zip_package
         vars: { APP_VERSION: '{{.APP_VERSION}}' }
 
