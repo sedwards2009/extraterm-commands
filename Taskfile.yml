@@ -42,7 +42,7 @@ tasks:
       GROUP_ID:
         sh: id -g
     cmds:
-      - docker run -it --rm --user {{.USER_ID}}:{{.GROUP_ID}} --volume .:/extraterm-commands extraterm_commands_zig /bin/bash -c 'cd /extraterm-commands && task -v _package_inside_docker'
+      - docker run -i --rm --user {{.USER_ID}}:{{.GROUP_ID}} --volume .:/extraterm-commands extraterm_commands_zig /bin/bash -c 'cd /extraterm-commands && task -v _package_inside_docker'
 
   clean:
     cmds:
